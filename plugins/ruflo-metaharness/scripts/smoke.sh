@@ -170,5 +170,24 @@ if (!od.metaharness) { console.error('missing metaharness in optionalDependencie
 if (j.dependencies && j.dependencies.metaharness) { console.error('metaharness leaked into dependencies'); process.exit(1); }
 " 2>/dev/null && ok || bad "ruflo wrapper missing metaharness optionalDep"
 
+step "17. eject command — Phase 2 differentiator (iter 4)"
+F="$ROOT/../../v3/@claude-flow/cli/src/commands/eject.ts"
+miss=""
+[[ -f "$F" ]] || miss="$miss command-file-missing"
+grep -q "name: 'eject'" "$F" 2>/dev/null || miss="$miss no-name-field"
+grep -q "from-existing" "$F" 2>/dev/null || miss="$miss no-from-existing-flag"
+# Safety: must refuse writing inside the calling repo
+grep -q "target-inside-repo" "$F" 2>/dev/null || miss="$miss no-repo-refusal"
+grep -q "target-exists" "$F" 2>/dev/null || miss="$miss no-exists-refusal"
+# Dry-run default — confirm flag required
+grep -q "confirm" "$F" 2>/dev/null || miss="$miss no-confirm-flag"
+grep -q "dryRun" "$F" 2>/dev/null || miss="$miss no-dryrun"
+# Graceful degradation on missing binary
+grep -q "metaharness-not-available\|degraded:" "$F" 2>/dev/null || miss="$miss no-graceful-deg"
+# Registered in the loader
+LOADER="$ROOT/../../v3/@claude-flow/cli/src/commands/index.ts"
+grep -q "eject: () => import" "$LOADER" 2>/dev/null || miss="$miss not-registered-in-loader"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 printf "\n%s passed, %s failed\n" "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]] || exit 1

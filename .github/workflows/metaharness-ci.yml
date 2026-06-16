@@ -121,3 +121,46 @@ jobs:
         # router@0.4.x, this fails BEFORE we publish a ruflo release
         # that would break neural-router.ts at runtime.
         run: node scripts/check-metaharness-compat.mjs
+
+  eject-dryrun:
+    # ADR-150 Phase 2 — verify `ruflo eject` dry-run produces a valid
+    # plan against the ruflo repo itself, AND that the safety gate
+    # rejects --target paths inside the repo. The actual eject is
+    # never executed in CI; only the dry-run path + safety gates.
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build CLI to dist
+        # The eject command lives in v3/@claude-flow/cli/src/commands/.
+        # CI doesn't have the bundled dist; build it here.
+        run: |
+          cd v3/@claude-flow/cli
+          npm install --no-audit --no-fund --ignore-scripts --silent
+          npm run build
+
+      - name: eject dry-run produces a valid plan
+        run: |
+          set -e
+          # Run via the built bin
+          OUT=$(node v3/@claude-flow/cli/bin/cli.js eject --name my-test-harness --format json 2>&1 || true)
+          echo "$OUT" | head -20
+          # Must contain the dry-run plan + dryRun:true
+          echo "$OUT" | grep -q '"dryRun"' || { echo "FAIL: eject dry-run did not emit dryRun:true"; exit 1; }
+          echo "$OUT" | grep -q '"name": "my-test-harness"' || { echo "FAIL: name not in plan"; exit 1; }
+          echo "✓ eject dry-run plan validates"
+
+      - name: eject refuses --target inside the repo (safety gate)
+        run: |
+          set -e
+          OUT=$(node v3/@claude-flow/cli/bin/cli.js eject --name foo --target "$PWD/eject-test" --confirm 2>&1 || true)
+          echo "$OUT" | head -10
+          echo "$OUT" | grep -qi "refusing to write\|target-inside-repo" || {
+            echo "FAIL: eject should refuse --target inside the repo"
+            exit 1
+          }
+          echo "✓ eject correctly refused in-repo target"

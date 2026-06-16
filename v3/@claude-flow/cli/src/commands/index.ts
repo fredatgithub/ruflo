@@ -80,6 +80,8 @@ const commandLoaders: Record<string, CommandLoader> = {
   'gaia-bench': () => import('./gaia-bench.js'),
   // MetaHarness integration (ADR-150) — dispatcher over plugins/ruflo-metaharness/
   metaharness: () => import('./metaharness.js'),
+  // Eject (ADR-150 Phase 2) — lift ruflo project into a renamed standalone harness
+  eject: () => import('./eject.js'),
 };
 
 // Cache for loaded commands
