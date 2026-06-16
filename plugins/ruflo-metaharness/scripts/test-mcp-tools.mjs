@@ -74,7 +74,7 @@ async function main() {
   // ──────────────────────────────────────────────────────────────────
   console.log('Phase 1 — module shape');
   assert(Array.isArray(tools), 'metaharnessTools is an array');
-  assert(tools.length === 7, `7 tools registered (got ${tools.length})`);
+  assert(tools.length === 8, `8 tools registered (got ${tools.length})`);
 
   const expectedNames = new Set([
     'metaharness_score',
@@ -84,6 +84,8 @@ async function main() {
     'metaharness_oia_audit',
     'metaharness_audit_list',
     'metaharness_audit_trend',
+    // iter 36 — ADR-152 §3.1 production
+    'metaharness_similarity',
   ]);
   const actualNames = new Set(tools.map((t) => t.name));
   for (const name of expectedNames) {
@@ -121,6 +123,11 @@ async function main() {
       // resolve so we exercise the not-found path.
       input = { baselineKey: 'audit-fake-base', currentKey: 'audit-fake-curr' };
     }
+    if (tool.name === 'metaharness_similarity') {
+      // Needs --a/--b OR --a-key/--b-key. Use fake mem keys to exercise
+      // the graceful not-found path (matches audit_trend convention).
+      input = { aKey: 'harness-fake-a', bKey: 'harness-fake-b' };
+    }
 
     // 30s budget per tool — slow path is npx warmup
     const handlerPromise = tool.handler(input);
@@ -152,7 +159,7 @@ async function main() {
     for (const f of failures) console.log(`  - ${f}`);
     process.exit(1);
   }
-  console.log('\n✓ All 7 MCP tools satisfy the runtime contract.');
+  console.log('\n✓ All 8 MCP tools satisfy the runtime contract.');
 }
 
 main().catch((e) => {

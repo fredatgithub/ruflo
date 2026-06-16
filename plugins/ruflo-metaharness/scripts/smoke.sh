@@ -425,10 +425,12 @@ grep -q "result has 'success'" "$F" || miss="$miss no-success-assertion"
 grep -q "result has 'data'" "$F" || miss="$miss no-data-assertion"
 grep -q "result has 'degraded'" "$F" || miss="$miss no-degraded-assertion"
 grep -q "result has 'exitCode'" "$F" || miss="$miss no-exitcode-assertion"
-# All 7 tool names enumerated
-for tool in metaharness_score metaharness_genome metaharness_mcp_scan metaharness_threat_model metaharness_oia_audit metaharness_audit_list metaharness_audit_trend; do
+# All 8 tool names enumerated (similarity added in iter 36, runtime-tested iter 37)
+for tool in metaharness_score metaharness_genome metaharness_mcp_scan metaharness_threat_model metaharness_oia_audit metaharness_audit_list metaharness_audit_trend metaharness_similarity; do
   grep -q "${tool}" "$F" || miss="$miss missing-${tool}"
 done
+# Count assertion must match the iter-36 expansion (7 → 8)
+grep -q "tools.length === 8" "$F" || miss="$miss tool-count-assertion-stale"
 # Graceful skip when dist absent (so the script is smoke-runnable pre-build)
 grep -q "SKIPPED" "$F" || miss="$miss no-skip-doc"
 [[ -z "$miss" ]] && ok || bad "$miss"
