@@ -191,6 +191,27 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z53. MCP-tool runScript() references point at existing scripts (iter 90)"
+miss=""
+# Companion to iter-89's SUBCOMMANDS check. metaharness-tools.ts has 9
+# handlers, each calling runScript('<name>.mjs', args). If a future iter
+# renames a script but forgets the MCP-tool handler, the agent-callable
+# surface fails at runtime with "Script not found".
+WRAPPER="$ROOT/../../v3/@claude-flow/cli/src/mcp-tools/metaharness-tools.ts"
+SCRIPTS_DIR="$ROOT/scripts"
+# Extract `runScript('foo.mjs', ...)` references.
+REFS=$(grep -oE "runScript\('[a-z-]+\.mjs'" "$WRAPPER" 2>/dev/null \
+  | sed -E "s/runScript\('([a-z-]+\.mjs)'/\1/" \
+  | sort -u)
+COUNT=0
+for f in $REFS; do
+  COUNT=$((COUNT + 1))
+  [[ -f "$SCRIPTS_DIR/$f" ]] || miss="$miss mcp-script-${f}-missing"
+done
+# Should be 9 unique scripts (one per MCP tool; mint deliberately excluded)
+[[ "$COUNT" == "9" ]] || miss="$miss mcp-script-count-stale:$COUNT-expected-9"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17z52. SUBCOMMANDS map entries point at existing script files (iter 89)"
 miss=""
 # CLI dispatcher (metaharness.ts) has a SUBCOMMANDS map that routes
