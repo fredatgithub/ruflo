@@ -191,6 +191,21 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z58. drift-from-history exposes derived timing.path field (iter 95)"
+miss=""
+F="$ROOT/scripts/drift-from-history.mjs"
+# Code mention
+grep -q "path: usedBaselineFile ? 'file'" "$F" 2>/dev/null || miss="$miss no-derived-path"
+grep -q "skippedAuditList ? 'key' : 'slow'" "$F" 2>/dev/null || miss="$miss no-key-slow-branch"
+# Runtime: each path label surfaces correctly
+TMPB=$(mktemp)
+node "$ROOT/scripts/oia-audit.mjs" --dry-run --format json 2>/dev/null > "$TMPB"
+OUT_FILE=$(node "$F" --baseline-file "$TMPB" --dry-run --format json 2>/dev/null \
+  | python3 -c "import json,sys,re; m=re.search(r'\{[\s\S]*\}',sys.stdin.read()); print(json.loads(m.group()).get('timing',{}).get('path'))" 2>/dev/null)
+[[ "$OUT_FILE" == "file" ]] || miss="$miss baseline-file-path-not-file:$OUT_FILE"
+rm -f "$TMPB"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17z57. every CLI subcommand documented in CLAUDE.md (iter 94)"
 miss=""
 # Companion to iter-93's MCP-tool documentation gate. CLAUDE.md also

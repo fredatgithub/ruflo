@@ -315,6 +315,11 @@ async function main() {
         // iter 67 — when true, baseline came from a file instead of memory.
         // Skips audit-list AND the audit-trend memory roundtrip.
         usedBaselineFile,
+        // iter 95 — derived path label for cleaner consumer code:
+        //   'slow' — default (no fast-path arg); audit-list ran
+        //   'key'  — --baseline-key skipped audit-list, baseline came from memory
+        //   'file' — --baseline-file skipped audit-list AND memory roundtrip
+        path: usedBaselineFile ? 'file' : (skippedAuditList ? 'key' : 'slow'),
       },
       baseline: {
         key: baseline.key,
