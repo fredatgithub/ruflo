@@ -191,6 +191,18 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z46. ADR-150 notes reflect iters 60-82 (iter 83)"
+miss=""
+ADR="$ROOT/../../v3/docs/adr/ADR-150-metaharness-integration-surfaces.md"
+grep -q "Phase 3 §3.1 ✅ iters 33–82" "$ADR" 2>/dev/null || miss="$miss no-iter-82-status"
+grep -q "eighty-two iterations of /loop" "$ADR" 2>/dev/null || miss="$miss no-82-iter-marker"
+grep -q "Iters 60–82 — performance / observability / contract hardening" "$ADR" 2>/dev/null || miss="$miss no-60-82-section"
+grep -q "Three-tripwire upstream-contract defense" "$ADR" 2>/dev/null || miss="$miss no-tripwire-section"
+grep -q "Drift-detection autonomous arc (iters 53-79)" "$ADR" 2>/dev/null || miss="$miss no-drift-arc"
+grep -q "Artifact-tracking family (iters 7 + 69 + 82)" "$ADR" 2>/dev/null || miss="$miss no-artifact-family"
+grep -q "Fleet status (post-iter-82)" "$ADR" 2>/dev/null || miss="$miss no-post-82-fleet"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17z45. bench-similarity artifact + summary in CI (iter 82)"
 miss=""
 W="$ROOT/../../.github/workflows/metaharness-ci.yml"

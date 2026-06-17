@@ -1,7 +1,7 @@
 # ADR-150 — MetaHarness Integration Surfaces in `npx ruflo`
 
-**Status**: Implemented (Phase 1 ✅ iters 1–3 · Phase 2 ✅ iters 4–32 · Phase 3 §3.1 ✅ iters 33–59 · KRR retrain pending production data · Phase 3 §3.2-§3.5 scoped in [ADR-151](ADR-151-harness-intelligence-layer.md))
-**Date**: 2026-06-16 (revised 2026-06-16 — sixty iterations of /loop)
+**Status**: Implemented (Phase 1 ✅ iters 1–3 · Phase 2 ✅ iters 4–32 · Phase 3 §3.1 ✅ iters 33–82 · KRR retrain pending production data · Phase 3 §3.2-§3.5 scoped in [ADR-151](ADR-151-harness-intelligence-layer.md))
+**Date**: 2026-06-16 (revised 2026-06-16 — eighty-two iterations of /loop)
 **Related**: ADR-148 (cost-optimal router lifecycle via `@metaharness/router`), ADR-149 (per-model cost-optimal routing), ADR-026 (3-tier model routing), ADR-097 (federation budget circuit breaker), ADR-124 (optional native dependencies), ADR-144 (agent-authorization-propagation)
 **External reference**: [`ruvnet/agent-harness-generator`](https://github.com/ruvnet/agent-harness-generator) — the upstream that publishes `metaharness` + `@metaharness/*`. Same author (rUv), explicitly designed around ruflo primitives.
 **Research dossier**: published as a gist (linked from the tracking issue) with full graded-evidence sourcing.
@@ -359,6 +359,114 @@ Both still OPEN as of iter 59. Downstream workarounds remain in place.
 - Unit tests: 53 similarity-module assertions
 - Total ruflo-metaharness smoke surface: ~260 assertions
 - 33/33 plugin fleet still green
+
+### Iters 60–82 — performance / observability / contract hardening
+
+A second wave of work after iter 59 focused on three orthogonal
+hardening axes: parallelization, anti-regression infrastructure, and
+upstream-contract tripwires.
+
+#### Parallelization sweep (iters 56-59 + 65 + 67)
+- **iter 56** oia-audit's 5 subprocess calls race via Promise.all
+  → 4.59x measured speedup (close to theoretical 5x).
+- **iter 58** drift-from-history's audit-list + oia-audit race
+  → 1.02-1.03x (audit-list's ONNX warmup dominates; race still
+  proves no serial regression).
+- **iter 59** oia-audit emits `timing.{wallMs, sumComponentMs,
+  parallelSpeedup}` so the speedup is observable and gated against
+  silent serial regression.
+- **iter 65** drift-from-history surfaces the same timing fields.
+- **iter 67** `--baseline-file` fast-path: skips audit-list AND
+  audit-trend memory roundtrip → ~19x speedup (1.4s wall on Apple
+  Silicon vs ~26s slow path). Iter 66's `--baseline-key` was the
+  intermediate ~14x step.
+
+#### Three-tripwire upstream-contract defense (iters 12 + 80 + 81)
+| Tripwire | Surface | Iter |
+|---|---|---|
+| `check-metaharness-compat.mjs` | `@metaharness/router` public API | 12 |
+| `check-mcp-scan-format.mjs` | `harness mcp-scan` text-output format | 80 |
+| `check-fingerprint-schema.mjs` | `metaharness score`/`genome` JSON fields | 81 |
+
+Each tripwire runs in CI `metaharness-real-data` job BEFORE the
+roundtrip — upstream drift fails with a SPECIFIC error pointing at
+which surface broke, instead of cascading to downstream symptoms.
+
+#### Anti-regression infrastructure
+- **iter 64** rankSeverity + rollup unit tests (22 assertions) —
+  iter-63's shared severity util now anchored at primitive level.
+- **iter 72** parseMcpScanText edge cases (19 assertions) —
+  iter-50's parser now anchored against silent regex drift.
+- **iter 73** negative-grep guard: anti-mint-as-MCP enforcement.
+- **iter 74** generalized negative guards: from-repo never wrapped;
+  no new static `@metaharness/*` imports outside neural-router.ts.
+
+#### Bug-discovery + fix arc (iters 47-77)
+The roundtrip test surfaced 4 latent bugs that hand-built-fixture
+testing had missed:
+- **iter 47** — score/genome schema mismatch (28 iters silent)
+- **iter 49** — audit-trend introduced/cleared was dead code
+- **iter 50** — fixed via shared parseMcpScanText util
+- **iter 51** — proved drift detection fires on mutation, not just
+  self-match
+- **iter 62** — extended SEVERITY_RANK; iter-50 parser unlocked
+  warn/critical findings that the rollup ignored
+- **iter 63** — consolidated SEVERITY_RANK + safe rankSeverity()
+  across all 3 consumers
+- **iters 76-77** — mutation-tested introduced/cleared at all four
+  corners: clear, introduce, swap, dedup.
+
+#### Drift-detection autonomous arc (iters 53-79)
+- **iter 53** — drift-from-history one-command primitive
+  composing audit-list + oia-audit + audit-trend
+- **iter 58** — parallel batch
+- **iter 65** — observable timing
+- **iter 66** — `--baseline-key` fast-path (~14x)
+- **iter 67** — `--baseline-file` fastest-path (~19x)
+- **iter 68** — roundtrip Stage 8 exercises wrapper end-to-end
+- **iter 69** — weekly cron AUTO-runs drift detection every Sunday;
+  downloads prior artifact via `gh run download`
+- **iter 70** — drift steps use `if: always() && has_prior` so
+  failure-path artifacts (the most valuable) still get uploaded
+- **iter 75** — Stage 9 proves the fastpath catches drift, not just
+  self-match
+- **iter 78** — `--alert-on-new-severity` orthogonal alert gate
+  (catches "new CRITICAL finding with similarity intact")
+- **iter 79** — weekly cron passes `--alert-on-new-severity high`,
+  closing the production wiring
+
+#### Doctor expansion (iters 45 + 52 + 61)
+- iter 45 separates ruflo-side integration health from upstream-dep
+  presence (different remediation paths)
+- iter 52 verifies parseMcpScanText export
+- iter 61 verifies iter-56 async exports (runHarnessAsync /
+  runMetaharnessAsync) — missing = oia-audit parallelization breaks
+
+#### MCP-CLI parity (iters 53 → 71)
+All 9 MCP tools have CLI-level flag parity. Iter 71 specifically
+fixed drift-from-history (iter-66/67 flags were CLI-only until then).
+Iter 73's anti-mint negative guard enforces the deliberate
+asymmetry: 10 CLI subcommands, 9 MCP tools (mint cli-only per
+§Sandboxing).
+
+#### Artifact-tracking family (iters 7 + 69 + 82)
+| Artifact | Workflow | Iter |
+|---|---|---|
+| `oia-audit-${run_id}` | weekly cron | 7 |
+| `drift-trend-${run_id}` | weekly cron | 69 |
+| `bench-similarity-${run_id}` | per-PR CI | 82 |
+
+All 90-day retention for cross-artifact comparability.
+
+### Fleet status (post-iter-82)
+- Smoke step count: 19 → 85 (+66 invariants since iter 8)
+- MCP tool runtime contract: 117 assertions across 9 tools
+- Real-data roundtrip: 66 pipeline assertions across 12 stages
+- Unit tests: 94 similarity + severity + parser assertions
+- 3 compat tripwires (router API / mcp-scan text format / fingerprint schema)
+- 33/33 plugin fleet still green
+- 4 CI workflows (metaharness-ci, no-metaharness-smoke, oia-audit-weekly,
+  metaharness-real-data sub-job)
 
 ### Quote architecture invariant — no static metaharness imports
 
